@@ -1,0 +1,31 @@
+{
+  "name": "WantThis",
+  "short_name": "WantThis",
+  "description": "La wishlist familiale qui évite les cadeaux en double.",
+  "start_url": "/WantThis/",
+  "scope": "/WantThis/",
+  "display": "standalone",
+  "background_color": "#f4f4fb",
+  "theme_color": "#6d5dfc",
+  "lang": "fr",
+  "icons": [
+    {
+      "src": "/WantThis/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/WantThis/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/WantThis/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
