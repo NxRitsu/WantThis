@@ -1,4 +1,4 @@
-import { app, esc } from '../store.js'
+import { app, esc, state } from '../store.js'
 import { shell, wireLayout } from './layout.js'
 import { getMyGroups, createGroup, joinGroup } from '../api.js'
 import { navigate } from '../router.js'
@@ -56,8 +56,20 @@ export async function renderGroups() {
         <button class="btn btn--block btn--ghost" type="submit">Rejoindre</button>
       </form>
     </div>
+
+    ${
+      state.profile?.is_admin
+        ? `<div class="card">
+             <h3>Administration</h3>
+             <p class="muted">Gérer les comptes utilisateurs.</p>
+             <button class="btn btn--block" id="admin-link">Ouvrir l'administration</button>
+           </div>`
+        : ''
+    }
   `)
   wireLayout(app())
+
+  app().querySelector('#admin-link')?.addEventListener('click', () => navigate('/admin'))
 
   app().querySelectorAll('[data-open]').forEach((btn) =>
     btn.addEventListener('click', () => navigate('/group/' + btn.getAttribute('data-open')))

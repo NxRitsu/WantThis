@@ -1,6 +1,7 @@
 // État applicatif minimal partagé entre les vues.
 export const state = {
   user: null, // utilisateur Auth courant
+  profile: null, // profil applicatif (display_name, is_admin)
 }
 
 export const app = () => document.getElementById('app')

@@ -41,6 +41,34 @@ npm run dev                # ouvre http://localhost:5173/WantThis/
 3. Vérifie que **B** (et les autres) voient « Déjà réservé », mais que **A**
    (propriétaire) ne voit aucune trace de réservation sur sa propre liste.
 
+## Administration (supprimer des comptes)
+
+La suppression d'un compte d'auth exige la clé `service_role`, qui ne doit jamais
+être dans le frontend. Elle est donc confiée à une **Edge Function** Supabase qui
+vérifie que l'appelant est admin avant d'agir. Mise en place (3 étapes) :
+
+1. **SQL** : exécute [`supabase/admin.sql`](supabase/admin.sql) dans le SQL Editor
+   (ajoute la colonne `is_admin`), puis désigne-toi admin :
+   ```sql
+   update public.profiles set is_admin = true
+     where id = (select id from auth.users where email = 'ton-email@exemple.com');
+   ```
+2. **Déploie l'Edge Function** `supabase/functions/admin/` :
+   - *Soit* via le **dashboard** : Supabase → *Edge Functions* → *Create a function* →
+     nomme-la `admin` → colle le contenu de `supabase/functions/admin/index.ts` → Deploy.
+   - *Soit* via la **CLI** :
+     ```bash
+     npm i -g supabase
+     supabase login
+     supabase link --project-ref otpmagmyvanwwrcovejc
+     supabase functions deploy admin
+     ```
+   Les variables `SUPABASE_URL`, `SUPABASE_ANON_KEY` et `SUPABASE_SERVICE_ROLE_KEY`
+   sont injectées automatiquement dans la fonction — rien à configurer.
+3. **Utilise-la** : reconnecte-toi dans l'app ; un bloc *Administration* apparaît sur
+   l'écran « Mes groupes ». Tu peux y lister et supprimer des comptes (cascade sur
+   leurs groupes/cadeaux/réservations).
+
 ## Structure
 ```
 supabase/schema.sql   Tables + fonctions + policies RLS (le cœur de la sécurité)

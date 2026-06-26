@@ -2,6 +2,51 @@ import { supabase } from './supabase.js'
 import { state } from './store.js'
 
 // ---------------------------------------------------------------------------
+// Profil courant
+// ---------------------------------------------------------------------------
+
+// Récupère mon profil (dont le drapeau is_admin).
+export async function getMyProfile() {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('id, display_name, is_admin')
+    .eq('id', state.user.id)
+    .single()
+  if (error) throw error
+  return data
+}
+
+// ---------------------------------------------------------------------------
+// Administration (via l'Edge Function "admin", protégée côté serveur)
+// ---------------------------------------------------------------------------
+
+async function callAdmin(body) {
+  const { data, error } = await supabase.functions.invoke('admin', { body })
+  if (error) {
+    // Tente de récupérer le message d'erreur renvoyé par la fonction.
+    let msg = error.message
+    try {
+      const j = await error.context.json()
+      if (j?.error) msg = j.error
+    } catch {
+      /* ignore */
+    }
+    throw new Error(msg)
+  }
+  if (data?.error) throw new Error(data.error)
+  return data
+}
+
+export async function adminListUsers() {
+  const data = await callAdmin({ action: 'list' })
+  return data.users ?? []
+}
+
+export async function adminDeleteUser(userId) {
+  return callAdmin({ action: 'delete', userId })
+}
+
+// ---------------------------------------------------------------------------
 // Groupes
 // ---------------------------------------------------------------------------
 
