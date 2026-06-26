@@ -71,12 +71,17 @@ vérifie que l'appelant est admin avant d'agir. Mise en place (3 étapes) :
 
 ## Structure
 ```
-supabase/schema.sql   Tables + fonctions + policies RLS (le cœur de la sécurité)
-src/supabase.js       Client Supabase
-src/auth.js           Inscription / connexion / session
-src/api.js            Accès données (groupes, cadeaux, réservations, realtime)
-src/router.js         Routeur hash minimal
-src/views/            Écrans (login, groups, dashboard, myList, memberList)
-public/               Manifest PWA, service worker, icônes
-scripts/gen-icons.mjs Génère les icônes PNG
+supabase/schema.sql           Tables + fonctions + policies RLS (le cœur de la sécurité)
+supabase/admin.sql            Colonne is_admin sur profiles (feature administration)
+supabase/functions/admin/     Edge Function de suppression de comptes (clé service_role)
+src/supabase.js               Client Supabase
+src/auth.js                   Inscription / connexion / session
+src/store.js                  État global (user, profile) + helpers (app, esc, initials)
+src/api.js                    Accès données (groupes, cadeaux, réservations, realtime, admin)
+src/router.js                 Routeur hash minimal
+src/main.js                   Bootstrap, routes, garde d'auth, enregistrement du SW
+src/views/                    Écrans : login, groups, dashboard, myList, memberList, admin
+src/views/layout.js           Coquille commune (en-tête, navigation)
+public/                       Manifest PWA, service worker, icônes
+scripts/gen-icons.mjs         Génère les icônes PNG
 ```
