@@ -9,6 +9,7 @@ import {
   subscribeToGroup,
 } from '../api.js'
 import { navigate, currentPath } from '../router.js'
+import { icons } from '../icons.js'
 
 function priceLabel(p) {
   return p == null ? '' : `${Number(p).toFixed(2)} €`
@@ -56,7 +57,7 @@ export async function renderMemberList({ id: groupId, userId: ownerId }) {
         .map((g) => {
           const r = byGift.get(g.id)
           const sub = [
-            g.url ? `<a href="${esc(g.url)}" target="_blank" rel="noopener">Lien</a>` : '',
+            g.url ? `<a href="${esc(g.url)}" target="_blank" rel="noopener">Voir le lien</a>` : '',
             g.price != null ? esc(priceLabel(g.price)) : '',
           ]
             .filter(Boolean)
@@ -66,18 +67,25 @@ export async function renderMemberList({ id: groupId, userId: ownerId }) {
           if (!r) {
             action = `<button class="btn btn--sm" data-reserve="${esc(g.id)}">Réserver</button>`
           } else if (r.reserved_by === me) {
-            badge = `<span class="badge badge--mine">Réservé par toi</span>`
+            badge = `<span class="badge badge--mine">${icons.check} Réservé par toi</span>`
             action = `<button class="btn btn--sm btn--danger" data-cancel="${esc(g.id)}">Annuler</button>`
           } else {
-            badge = `<span class="badge badge--reserved">Déjà réservé</span>`
+            badge = `<span class="badge badge--reserved">${icons.lock} Déjà réservé</span>`
             action = `<button class="btn btn--sm" disabled>Réserver</button>`
           }
 
           return `
           <li class="list-item">
-            <div class="list-item__main">
-              <div class="list-item__title">${esc(g.title)} ${badge}</div>
-              ${sub ? `<div class="list-item__sub">${sub}</div>` : ''}
+            <div class="row" style="min-width:0">
+              ${
+                g.image_url
+                  ? `<img class="thumb" src="${esc(g.image_url)}" alt="" loading="lazy" referrerpolicy="no-referrer" />`
+                  : ''
+              }
+              <div class="list-item__main">
+                <div class="list-item__title">${esc(g.title)} ${badge}</div>
+                ${sub ? `<div class="list-item__sub">${sub}</div>` : ''}
+              </div>
             </div>
             ${action}
           </li>`
@@ -89,10 +97,10 @@ export async function renderMemberList({ id: groupId, userId: ownerId }) {
     `
     <div class="card">
       <h2>Liste de ${esc(owner?.display_name || '?')}</h2>
-      <p class="muted">Réserve un cadeau : tout le monde le verra réservé, sauf ${esc(
+      <p class="hint">${icons.lock} Réserve un cadeau : tout le monde le verra réservé, sauf ${esc(
         owner?.display_name || 'le propriétaire'
-      )}. 🤫</p>
-      <div id="list">${listHtml}</div>
+      )}.</p>
+      <div id="list" style="margin-top:16px">${listHtml}</div>
     </div>
   `,
     { title: owner?.display_name || 'Liste', back }

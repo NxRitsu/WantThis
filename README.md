@@ -69,6 +69,25 @@ vérifie que l'appelant est admin avant d'agir. Mise en place (3 étapes) :
    l'écran « Mes groupes ». Tu peux y lister et supprimer des comptes (cascade sur
    leurs groupes/cadeaux/réservations).
 
+## Import auto de la photo et du prix
+
+Quand on colle le lien d'un produit, l'app récupère automatiquement sa **photo**
+(Open Graph) et son **prix**. Un frontend statique ne peut pas lire le HTML d'un
+autre domaine (CORS) : c'est une **Edge Function** `unfurl` qui va chercher la page
+côté serveur et en extrait les métadonnées. Mise en place (2 étapes) :
+
+1. **SQL** : ajoute la colonne image au schéma (déjà inclus si tu réexécutes
+   [`supabase/schema.sql`](supabase/schema.sql)). Sinon, en une ligne :
+   ```sql
+   alter table public.gifts add column if not exists image_url text;
+   ```
+2. **Déploie l'Edge Function** `supabase/functions/unfurl/` (même procédure que `admin`) :
+   - *dashboard* : Supabase → *Edge Functions* → *Create a function* → nomme-la
+     `unfurl` → colle [`supabase/functions/unfurl/index.ts`](supabase/functions/unfurl/index.ts) → Deploy ;
+   - *ou CLI* : `supabase functions deploy unfurl`.
+
+   La fonction n'est utilisable que par un utilisateur connecté (pas de proxy ouvert).
+
 ## Structure
 ```
 supabase/schema.sql           Tables + fonctions + policies RLS (le cœur de la sécurité)

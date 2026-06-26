@@ -23,6 +23,24 @@ export async function signOut() {
   if (error) throw error
 }
 
+// Envoie un email avec un lien de réinitialisation. Le lien renvoie vers
+// l'app (racine), où l'événement PASSWORD_RECOVERY déclenche l'écran de
+// définition d'un nouveau mot de passe.
+export async function sendPasswordReset(email) {
+  // Marqueur ?type=recovery : Supabase y ajoute son ?code=… (flux PKCE). Au
+  // retour, l'app lit ce marqueur pour ouvrir l'écran de nouveau mot de passe
+  // (l'événement PASSWORD_RECOVERY se déclenche trop tôt pour être capté).
+  const redirectTo = `${window.location.origin}${import.meta.env.BASE_URL}?type=recovery`
+  const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo })
+  if (error) throw error
+}
+
+// Définit le nouveau mot de passe (nécessite une session de récupération active).
+export async function updatePassword(newPassword) {
+  const { error } = await supabase.auth.updateUser({ password: newPassword })
+  if (error) throw error
+}
+
 export async function getSession() {
   const { data } = await supabase.auth.getSession()
   return data.session
@@ -33,7 +51,8 @@ export async function getCurrentUser() {
   return data.user
 }
 
-// Notifie à chaque changement d'état (connexion / déconnexion).
+// Notifie à chaque changement d'état (connexion / déconnexion / récupération).
+// callback(session, event) — event ex: 'SIGNED_IN', 'PASSWORD_RECOVERY'…
 export function onAuthChange(callback) {
-  return supabase.auth.onAuthStateChange((_event, session) => callback(session))
+  return supabase.auth.onAuthStateChange((event, session) => callback(session, event))
 }

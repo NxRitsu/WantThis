@@ -40,9 +40,12 @@ create table if not exists public.gifts (
   owner_id   uuid not null references auth.users (id) on delete cascade,
   title      text not null,
   url        text,
+  image_url  text,
   price      numeric(10, 2),
   created_at timestamptz not null default now()
 );
+-- Ajout rétro-compatible pour les installations existantes.
+alter table public.gifts add column if not exists image_url text;
 
 -- Réservation d'un cadeau. gift_id UNIQUE => un seul réservataire par cadeau.
 create table if not exists public.reservations (
@@ -224,6 +227,11 @@ drop policy if exists "groups_select_member" on public.groups;
 create policy "groups_select_member" on public.groups
   for select using (public.is_group_member(id, auth.uid()));
 -- (la création passe par la fonction create_group, pas par un INSERT direct)
+
+-- Seul le créateur peut supprimer le groupe (cascade sur membres/cadeaux/réservations).
+drop policy if exists "groups_delete_creator" on public.groups;
+create policy "groups_delete_creator" on public.groups
+  for delete using (created_by = auth.uid());
 
 -- ---- group_members ----
 -- On voit les membres des groupes auxquels on appartient.

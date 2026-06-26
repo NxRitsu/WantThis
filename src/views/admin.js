@@ -2,6 +2,7 @@ import { app, esc, state } from '../store.js'
 import { shell, wireLayout } from './layout.js'
 import { adminListUsers, adminDeleteUser } from '../api.js'
 import { navigate } from '../router.js'
+import { icons } from '../icons.js'
 
 function fmtDate(iso) {
   try {
@@ -46,8 +47,8 @@ export async function renderAdmin() {
         <div class="list-item__main">
           <div class="list-item__title">
             ${esc(u.display_name || '(sans nom)')}
-            ${u.is_admin ? '<span class="badge badge--mine">admin</span>' : ''}
-            ${isMe ? '<span class="badge badge--reserved">vous</span>' : ''}
+            ${u.is_admin ? `<span class="badge badge--admin">${icons.shield} admin</span>` : ''}
+            ${isMe ? '<span class="badge badge--mine">vous</span>' : ''}
           </div>
           <div class="list-item__sub">${esc(u.email || '')} · inscrit le ${esc(fmtDate(u.created_at))}</div>
         </div>

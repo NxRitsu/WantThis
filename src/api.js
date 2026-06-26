@@ -64,13 +64,19 @@ export async function joinGroup(code) {
   return data // group_id
 }
 
-// Quitte un groupe.
+// Quitte un groupe (supprime sa propre appartenance).
 export async function leaveGroup(groupId, userId) {
   const { error } = await supabase
     .from('group_members')
     .delete()
     .eq('group_id', groupId)
     .eq('user_id', userId)
+  if (error) throw error
+}
+
+// Supprime un groupe (réservé au créateur via RLS ; cascade SQL sur le reste).
+export async function deleteGroup(groupId) {
+  const { error } = await supabase.from('groups').delete().eq('id', groupId)
   if (error) throw error
 }
 
@@ -126,7 +132,7 @@ export async function getGifts(groupId, ownerId) {
   return data ?? []
 }
 
-export async function addGift(groupId, ownerId, { title, url, price }) {
+export async function addGift(groupId, ownerId, { title, url, price, image_url }) {
   const { data, error } = await supabase
     .from('gifts')
     .insert({
@@ -134,6 +140,7 @@ export async function addGift(groupId, ownerId, { title, url, price }) {
       owner_id: ownerId,
       title,
       url: url || null,
+      image_url: image_url || null,
       price: price === '' || price == null ? null : Number(price),
     })
     .select()
@@ -142,19 +149,40 @@ export async function addGift(groupId, ownerId, { title, url, price }) {
   return data
 }
 
-export async function updateGift(giftId, { title, url, price }) {
+export async function updateGift(giftId, { title, url, price, image_url }) {
+  const patch = {
+    title,
+    url: url || null,
+    price: price === '' || price == null ? null : Number(price),
+  }
+  // image_url n'est mis à jour que s'il est fourni (l'édition inline ne le touche pas).
+  if (image_url !== undefined) patch.image_url = image_url || null
+
   const { data, error } = await supabase
     .from('gifts')
-    .update({
-      title,
-      url: url || null,
-      price: price === '' || price == null ? null : Number(price),
-    })
+    .update(patch)
     .eq('id', giftId)
     .select()
     .single()
   if (error) throw error
   return data
+}
+
+// Récupère image / prix / titre d'une page produit (via l'Edge Function unfurl).
+export async function unfurl(url) {
+  const { data, error } = await supabase.functions.invoke('unfurl', { body: { url } })
+  if (error) {
+    let msg = error.message
+    try {
+      const j = await error.context.json()
+      if (j?.error) msg = j.error
+    } catch {
+      /* ignore */
+    }
+    throw new Error(msg)
+  }
+  if (data?.error) throw new Error(data.error)
+  return data // { title, image, price, currency }
 }
 
 export async function deleteGift(giftId) {

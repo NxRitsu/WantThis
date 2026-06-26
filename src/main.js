@@ -9,6 +9,7 @@ import { renderDashboard } from './views/dashboard.js'
 import { renderMyList } from './views/myList.js'
 import { renderMemberList } from './views/memberList.js'
 import { renderAdmin } from './views/admin.js'
+import { renderResetPassword } from './views/resetPassword.js'
 
 // Charge le profil courant (dont is_admin) si pas déjà fait.
 async function ensureProfile() {
@@ -43,25 +44,40 @@ route('/group/:id', requireAuth(renderDashboard))
 route('/group/:id/me', requireAuth(renderMyList))
 route('/group/:id/member/:userId', requireAuth(renderMemberList))
 route('/admin', requireAuth(renderAdmin))
+route('/reset-password', renderResetPassword)
 
 setFallback(() => navigate(state.user ? '/groups' : '/login'))
+
+// On capture le marqueur de récupération AVANT tout await : Supabase nettoie
+// l'URL (?code, ?type) de façon asynchrone une fois la session échangée.
+const isRecoveryFlow =
+  new URLSearchParams(window.location.search).get('type') === 'recovery' ||
+  window.location.hash.includes('type=recovery')
 
 // --- Initialisation : récupérer la session avant de démarrer le routeur ---
 async function boot() {
   const session = await getSession()
   state.user = session?.user ?? null
 
-  // Réagir aux connexions / déconnexions.
-  onAuthChange((session) => {
+  // Réagir aux connexions / déconnexions / récupération de mot de passe.
+  onAuthChange((session, event) => {
     const wasLogged = !!state.user
     state.user = session?.user ?? null
     state.profile = null // rechargé à la demande par ensureProfile()
-    if (!state.user && wasLogged) {
+    if (event === 'PASSWORD_RECOVERY') {
+      navigate('/reset-password')
+    } else if (!state.user && wasLogged) {
       navigate('/login')
     }
   })
 
   startRouter()
+
+  // Retour depuis le lien email : ouvrir l'écran de nouveau mot de passe.
+  if (isRecoveryFlow && state.user) {
+    navigate('/reset-password')
+    return
+  }
 
   // Si on arrive à la racine, router vers le bon écran.
   if (currentPath() === '/') {

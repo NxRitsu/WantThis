@@ -1,22 +1,23 @@
 import { esc } from '../store.js'
 import { signOut } from '../auth.js'
 import { navigate } from '../router.js'
+import { icons } from '../icons.js'
 
-// Construit le markup de l'écran avec une barre supérieure.
+// Construit le markup de l'écran avec une barre supérieure translucide.
 // options: { title, back } — back = chemin de retour (ou null).
 export function shell(bodyHtml, { title = 'WantThis', back = null } = {}) {
   return `
     <header class="topbar">
-      <div class="row">
+      <div class="topbar__left">
         ${
           back
-            ? `<button class="link-btn" style="color:#fff" data-back="${esc(back)}">‹ Retour</button>`
-            : `<span class="brand">🎁 WantThis</span>`
+            ? `<button class="icon-btn" data-back="${esc(back)}" aria-label="Retour">${icons.back}<span>Retour</span></button>`
+            : `<span class="brand">${icons.gift}WantThis</span>`
         }
       </div>
-      <div class="row">
-        ${back ? `<span class="brand">${esc(title)}</span>` : ''}
-        <button class="link-btn" style="color:#fff" data-logout>Déconnexion</button>
+      <div class="topbar__center">${back ? esc(title) : ''}</div>
+      <div class="topbar__right">
+        <button class="icon-btn" data-logout aria-label="Déconnexion">${icons.logout}</button>
       </div>
     </header>
     <main class="container">${bodyHtml}</main>

@@ -34,14 +34,14 @@ function chunk(type, data) {
 }
 
 function pixel(u, v) {
-  const purple = [109, 93, 252]
+  const indigo = [99, 102, 241]
   const white = [255, 255, 255]
   const inBox = u > 0.24 && u < 0.76 && v > 0.34 && v < 0.78
   const ribbonV = Math.abs(u - 0.5) < 0.05
   const lid = v > 0.34 && v < 0.46 && u > 0.2 && u < 0.8
-  if (lid) return Math.abs(u - 0.5) < 0.05 ? purple : white
-  if (inBox) return ribbonV ? purple : white
-  return purple
+  if (lid) return Math.abs(u - 0.5) < 0.05 ? indigo : white
+  if (inBox) return ribbonV ? indigo : white
+  return indigo
 }
 
 function makePng(size) {
