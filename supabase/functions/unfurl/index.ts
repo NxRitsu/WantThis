@@ -117,23 +117,55 @@ function looksBlocked(status: number, html: string): boolean {
 
 // Récupère le HTML via un service proxy (ScraperAPI) si une clé est configurée.
 // Le tiers contourne le filtrage IP ; le parsing reste fait par notre fonction.
+// NB : pas de country_code (géo-ciblage réservé aux plans payants → 400 sinon).
 async function fetchViaProxy(target: string): Promise<string | null> {
   const key = Deno.env.get('SCRAPER_API_KEY')
-  if (!key) return null
+  if (!key) {
+    console.error('[unfurl] SCRAPER_API_KEY absent — pas de fallback proxy')
+    return null
+  }
   const proxyUrl =
     `https://api.scraperapi.com/?api_key=${encodeURIComponent(key)}` +
-    `&url=${encodeURIComponent(target)}&render=true&country_code=fr`
+    `&url=${encodeURIComponent(target)}&render=true`
   const ctrl = new AbortController()
-  const timer = setTimeout(() => ctrl.abort(), 50_000) // render=true est lent
+  const timer = setTimeout(() => ctrl.abort(), 55_000) // render=true est lent
   try {
     const res = await fetch(proxyUrl, { signal: ctrl.signal })
-    if (!res.ok) return null
-    return (await res.text()).slice(0, 800_000)
-  } catch {
+    if (!res.ok) {
+      const body = await res.text().catch(() => '')
+      console.error('[unfurl] proxy HTTP', res.status, body.slice(0, 300))
+      return null
+    }
+    const text = (await res.text()).slice(0, 800_000)
+    console.log('[unfurl] proxy OK', text.length, 'octets pour', target)
+    return text
+  } catch (e) {
+    console.error('[unfurl] proxy erreur', e instanceof Error ? e.message : String(e))
     return null
   } finally {
     clearTimeout(timer)
   }
+}
+
+// Cherche un prix directement dans le DOM (dernier recours), pour les sites qui
+// n'exposent ni meta ni JSON-LD : Amazon (<span class="a-offscreen">), microdata
+// itemprop="price", ou attribut content/data-price proche d'un libellé de prix.
+function priceFromHtml(html: string): number | null {
+  // Amazon : le prix affiché est dans un span "a-offscreen".
+  const amz = html.match(/class="[^"]*\ba-offscreen\b[^"]*"[^>]*>\s*([^<]{1,24})</i)
+  if (amz) {
+    const p = parsePrice(amz[1])
+    if (p != null) return p
+  }
+  // Microdata : <... itemprop="price" content="12.99"> (ordre d'attributs libre).
+  const ip =
+    html.match(/itemprop=["']price["'][^>]*\bcontent=["']([^"']+)["']/i) ||
+    html.match(/\bcontent=["']([^"']+)["'][^>]*itemprop=["']price["']/i)
+  if (ip) {
+    const p = parsePrice(ip[1])
+    if (p != null) return p
+  }
+  return null
 }
 
 // Extrait titre / image / prix / devise d'un HTML (réutilisable : page directe
@@ -163,7 +195,8 @@ function extract(html: string, base: URL): Meta {
     parsePrice(metas['product:price:amount']) ??
     parsePrice(metas['og:price:amount']) ??
     parsePrice(metas['price']) ??
-    ld.price
+    ld.price ??
+    priceFromHtml(html)
   const currency =
     metas['product:price:currency'] || metas['og:price:currency'] || ld.currency || null
 
@@ -254,7 +287,9 @@ Deno.serve(async (req) => {
     // sites rendus en JavaScript). render=true exécute le JS et débloque l'IP.
     // Le tiers ne fait que livrer le HTML — l'extraction reste assurée ici.
     const incomplete = !data.image || data.price == null
-    if (looksBlocked(status, html) || incomplete) {
+    const blocked = looksBlocked(status, html)
+    console.log('[unfurl] direct', parsed.hostname, 'status', status, 'blocked', blocked, 'incomplete', incomplete)
+    if (blocked || incomplete) {
       const proxied = await fetchViaProxy(parsed.toString())
       if (proxied) {
         const d2 = extract(proxied, parsed)
@@ -274,6 +309,7 @@ Deno.serve(async (req) => {
       if (asin) data.image = amazonImageFromAsin(asin)
     }
 
+    console.log('[unfurl] résultat', JSON.stringify(data))
     return json(200, data)
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
