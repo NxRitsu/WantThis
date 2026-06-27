@@ -88,6 +88,31 @@ côté serveur et en extrait les métadonnées. Mise en place (2 étapes) :
 
    La fonction n'est utilisable que par un utilisateur connecté (pas de proxy ouvert).
 
+### Sites anti-bot ou rendus en JavaScript (générique)
+
+Certaines pages échouent au premier chargement : marchands qui servent une page
+anti-bot aux serveurs (Amazon…), ou sites rendus côté client (SPA) dont les
+métadonnées n'existent qu'après exécution du JS. Deux contournements, **génériques
+à tous les sites** :
+
+- **Fallback proxy (optionnel, recommandé)** : si la page directe est bloquée **ou
+  incomplète** (image ou prix manquant), la fonction retélécharge le HTML *réel*
+  via [ScraperAPI](https://www.scraperapi.com/) (proxies résidentiels + `render=true`
+  qui exécute le JS), puis en extrait prix/photo/titre avec le même parsing. À
+  activer en posant le secret :
+  ```bash
+  supabase secrets set SCRAPER_API_KEY=ta_cle_scraperapi
+  ```
+  (ou *dashboard* → Edge Functions → `unfurl` → *Secrets*). Sans cette clé, seul
+  le fetch direct est tenté.
+  > 💡 Tier gratuit ScraperAPI ≈ 1000 crédits/mois ; un appel `render=true` coûte
+  > ~10 crédits, soit ~100 imports « difficiles »/mois — largement suffisant pour
+  > un usage familial. N'importe quel fournisseur équivalent (ScrapingBee…) se
+  > branche en changeant l'URL dans `fetchViaProxy`.
+- **Photo Amazon sans scraping** : cas particulier gratuit — l'ASIN est lu dans
+  l'URL (`/dp/XXXXXXXXXX`) et l'image construite depuis le CDN Amazon, même sans
+  clé proxy et même si la page est bloquée. **Aucune configuration requise.**
+
 ## Structure
 ```
 supabase/schema.sql           Tables + fonctions + policies RLS (le cœur de la sécurité)

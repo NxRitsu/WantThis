@@ -84,6 +84,93 @@ function priceFromJsonLd(html: string): { price: number | null; currency: string
   return { price: null, currency: null }
 }
 
+// --- Amazon : photo sans scraping (déduite de l'ASIN présent dans l'URL) ------
+
+function isAmazonHost(host: string): boolean {
+  return /(^|\.)amazon\.[a-z.]+$/i.test(host) || /(^|\.)amzn\./i.test(host)
+}
+
+// Extrait l'ASIN (identifiant produit Amazon, 10 caractères) de l'URL.
+function asinFromUrl(u: URL): string | null {
+  const m = u.pathname.match(
+    /\/(?:dp|gp\/product|gp\/aw\/d|product|ASIN)\/([A-Z0-9]{10})(?:[/?]|$)/i
+  )
+  if (m) return m[1].toUpperCase()
+  const q = u.searchParams.get('asin')
+  return q && /^[A-Z0-9]{10}$/i.test(q) ? q.toUpperCase() : null
+}
+
+// URL d'image déterministe servie par le CDN Amazon à partir de l'ASIN.
+function amazonImageFromAsin(asin: string): string {
+  return `https://images-na.ssl-images-amazon.com/images/P/${asin}.01._SCLZZZZZZZ_.jpg`
+}
+
+// --- Détection de page anti-bot / blocage --------------------------------------
+
+function looksBlocked(status: number, html: string): boolean {
+  if (status === 503 || status === 403 || status === 429) return true
+  if (html.length < 1500) return true
+  return /not a robot|captcha|enter the characters you see|api-services-support@amazon|automated access|to discuss automated access/i.test(
+    html.slice(0, 20_000)
+  )
+}
+
+// Récupère le HTML via un service proxy (ScraperAPI) si une clé est configurée.
+// Le tiers contourne le filtrage IP ; le parsing reste fait par notre fonction.
+async function fetchViaProxy(target: string): Promise<string | null> {
+  const key = Deno.env.get('SCRAPER_API_KEY')
+  if (!key) return null
+  const proxyUrl =
+    `https://api.scraperapi.com/?api_key=${encodeURIComponent(key)}` +
+    `&url=${encodeURIComponent(target)}&render=true&country_code=fr`
+  const ctrl = new AbortController()
+  const timer = setTimeout(() => ctrl.abort(), 50_000) // render=true est lent
+  try {
+    const res = await fetch(proxyUrl, { signal: ctrl.signal })
+    if (!res.ok) return null
+    return (await res.text()).slice(0, 800_000)
+  } catch {
+    return null
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+// Extrait titre / image / prix / devise d'un HTML (réutilisable : page directe
+// ou page rendue par le proxy).
+type Meta = { title: string | null; image: string | null; price: number | null; currency: string | null }
+function extract(html: string, base: URL): Meta {
+  const metas = parseMetas(html)
+  const titleTag = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]?.trim()
+
+  let image =
+    metas['og:image'] ||
+    metas['og:image:url'] ||
+    metas['og:image:secure_url'] ||
+    metas['twitter:image'] ||
+    metas['twitter:image:src'] ||
+    null
+  if (image) {
+    try {
+      image = new URL(image, base.toString()).toString() // résout les chemins relatifs
+    } catch {
+      image = null
+    }
+  }
+
+  const ld = priceFromJsonLd(html)
+  const price =
+    parsePrice(metas['product:price:amount']) ??
+    parsePrice(metas['og:price:amount']) ??
+    parsePrice(metas['price']) ??
+    ld.price
+  const currency =
+    metas['product:price:currency'] || metas['og:price:currency'] || ld.currency || null
+
+  const title = metas['og:title'] || metas['twitter:title'] || titleTag || null
+  return { title, image, price, currency }
+}
+
 // Bloque les hôtes internes/privés (réduit le risque de SSRF).
 function isBlockedHost(host: string): boolean {
   const h = host.toLowerCase()
@@ -136,10 +223,11 @@ Deno.serve(async (req) => {
       return json(400, { error: 'URL non autorisée.' })
     }
 
-    // Récupération de la page (timeout 8 s, User-Agent navigateur).
+    // Récupération directe de la page (timeout 8 s, User-Agent navigateur).
     const ctrl = new AbortController()
     const timer = setTimeout(() => ctrl.abort(), 8000)
     let html = ''
+    let status = 0
     try {
       const res = await fetch(parsed.toString(), {
         signal: ctrl.signal,
@@ -150,41 +238,43 @@ Deno.serve(async (req) => {
           Accept: 'text/html,application/xhtml+xml',
         },
       })
+      status = res.status
       html = (await res.text()).slice(0, 600_000) // les métadonnées sont dans le <head>
+    } catch {
+      /* échec direct : on tentera le proxy ci-dessous */
     } finally {
       clearTimeout(timer)
     }
 
-    const metas = parseMetas(html)
-    const titleTag = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]?.trim()
+    // Extraction directe.
+    let data = extract(html, parsed)
 
-    let image =
-      metas['og:image'] ||
-      metas['og:image:url'] ||
-      metas['og:image:secure_url'] ||
-      metas['twitter:image'] ||
-      metas['twitter:image:src'] ||
-      null
-    if (image) {
-      try {
-        image = new URL(image, parsed.toString()).toString() // résout les chemins relatifs
-      } catch {
-        image = null
+    // On retente via le proxy (si SCRAPER_API_KEY configuré) dès que c'est utile :
+    // page bloquée (anti-bot) OU résultat incomplet (image ou prix manquant, ex.
+    // sites rendus en JavaScript). render=true exécute le JS et débloque l'IP.
+    // Le tiers ne fait que livrer le HTML — l'extraction reste assurée ici.
+    const incomplete = !data.image || data.price == null
+    if (looksBlocked(status, html) || incomplete) {
+      const proxied = await fetchViaProxy(parsed.toString())
+      if (proxied) {
+        const d2 = extract(proxied, parsed)
+        // On garde le meilleur de chaque source (la valeur déjà trouvée prime).
+        data = {
+          title: data.title || d2.title,
+          image: data.image || d2.image,
+          price: data.price ?? d2.price,
+          currency: data.currency || d2.currency,
+        }
       }
     }
 
-    const ld = priceFromJsonLd(html)
-    const price =
-      parsePrice(metas['product:price:amount']) ??
-      parsePrice(metas['og:price:amount']) ??
-      parsePrice(metas['price']) ??
-      ld.price
-    const currency =
-      metas['product:price:currency'] || metas['og:price:currency'] || ld.currency || null
+    // Amazon : à défaut d'image, on déduit la photo de l'ASIN (sans scraping).
+    if (!data.image && isAmazonHost(parsed.hostname)) {
+      const asin = asinFromUrl(parsed)
+      if (asin) data.image = amazonImageFromAsin(asin)
+    }
 
-    const title = metas['og:title'] || metas['twitter:title'] || titleTag || null
-
-    return json(200, { title, image, price, currency })
+    return json(200, data)
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
     return json(502, { error: `Impossible de lire la page : ${msg}` })
