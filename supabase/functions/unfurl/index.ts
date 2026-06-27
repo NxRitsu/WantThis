@@ -123,7 +123,7 @@ function looksBlocked(status: number, html: string): boolean {
 //   ultra    → proxies ultra premium, pour les protections les plus dures.
 //   render   → exécute le JS (sites SPA) ; lent.
 type ProxyOpts = { premium?: boolean; ultra?: boolean; render?: boolean }
-async function fetchViaProxy(target: string, opts: ProxyOpts): Promise<string | null> {
+async function fetchViaProxy(target: string, opts: ProxyOpts, timeoutMs: number): Promise<string | null> {
   const key = Deno.env.get('SCRAPER_API_KEY')
   if (!key) {
     console.error('[unfurl] SCRAPER_API_KEY absent — pas de fallback proxy')
@@ -137,7 +137,7 @@ async function fetchViaProxy(target: string, opts: ProxyOpts): Promise<string | 
 
   const tag = `${opts.ultra ? 'ultra' : opts.premium ? 'premium' : 'std'}${opts.render ? '+render' : ''}`
   const ctrl = new AbortController()
-  const timer = setTimeout(() => ctrl.abort(), opts.render ? 50_000 : 25_000)
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs)
   try {
     const res = await fetch(proxyUrl, { signal: ctrl.signal })
     if (!res.ok) {
@@ -309,15 +309,17 @@ Deno.serve(async (req) => {
     const need = () => !data.image || data.price == null
     console.log('[unfurl] direct', parsed.hostname, 'status', status, 'blocked', blocked, 'incomplete', need())
     if (blocked || need()) {
-      // Escalade par coût croissant : on s'arrête dès qu'on a image + prix.
-      //   1. proxy standard          (~1 crédit)
-      //   2. proxy premium           (~10 crédits) — domaines protégés (Fnac…)
-      //   3. ultra premium + rendu JS (~75 crédits) — protections dures / SPA
-      const attempts: ProxyOpts[] = [{}, { premium: true }, { ultra: true, render: true }]
-      for (const opts of attempts) {
-        const h = await fetchViaProxy(parsed.toString(), opts)
-        if (h) data = mergeMeta(data, extract(h, parsed))
-        if (!need()) break // résultat complet : inutile d'aller plus loin
+      // 1) Proxy PREMIUM sans rendu JS (~10 crédits) : rapide, et requis par les
+      //    « domaines protégés » (Fnac…). Couvre la plupart des e-commerces, qui
+      //    servent prix/OG dans le HTML serveur.
+      const h1 = await fetchViaProxy(parsed.toString(), { premium: true }, 35_000)
+      if (h1) data = mergeMeta(data, extract(h1, parsed))
+
+      // 2) Dernier recours : on a bien reçu du HTML mais il manque encore image
+      //    ou prix → page rendue en JS (SPA). On exécute le JS (lent, ~25 crédits).
+      if (h1 && need()) {
+        const h2 = await fetchViaProxy(parsed.toString(), { premium: true, render: true }, 45_000)
+        if (h2) data = mergeMeta(data, extract(h2, parsed))
       }
     }
 
