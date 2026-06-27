@@ -118,7 +118,9 @@ function looksBlocked(status: number, html: string): boolean {
 // Récupère le HTML via un service proxy (ScraperAPI) si une clé est configurée.
 // Le tiers contourne le filtrage IP ; le parsing reste fait par notre fonction.
 // NB : pas de country_code (géo-ciblage réservé aux plans payants → 400 sinon).
-async function fetchViaProxy(target: string): Promise<string | null> {
+// render=true exécute le JS (sites SPA) mais est lent et coûte ~10 crédits : on
+// ne l'utilise qu'en second recours.
+async function fetchViaProxy(target: string, render: boolean): Promise<string | null> {
   const key = Deno.env.get('SCRAPER_API_KEY')
   if (!key) {
     console.error('[unfurl] SCRAPER_API_KEY absent — pas de fallback proxy')
@@ -126,21 +128,21 @@ async function fetchViaProxy(target: string): Promise<string | null> {
   }
   const proxyUrl =
     `https://api.scraperapi.com/?api_key=${encodeURIComponent(key)}` +
-    `&url=${encodeURIComponent(target)}&render=true`
+    `&url=${encodeURIComponent(target)}${render ? '&render=true' : ''}`
   const ctrl = new AbortController()
-  const timer = setTimeout(() => ctrl.abort(), 55_000) // render=true est lent
+  const timer = setTimeout(() => ctrl.abort(), render ? 50_000 : 25_000)
   try {
     const res = await fetch(proxyUrl, { signal: ctrl.signal })
     if (!res.ok) {
       const body = await res.text().catch(() => '')
-      console.error('[unfurl] proxy HTTP', res.status, body.slice(0, 300))
+      console.error('[unfurl] proxy HTTP', res.status, 'render', render, body.slice(0, 300))
       return null
     }
     const text = (await res.text()).slice(0, 800_000)
-    console.log('[unfurl] proxy OK', text.length, 'octets pour', target)
+    console.log('[unfurl] proxy OK', text.length, 'octets (render', render + ') pour', target)
     return text
   } catch (e) {
-    console.error('[unfurl] proxy erreur', e instanceof Error ? e.message : String(e))
+    console.error('[unfurl] proxy erreur (render', render + ')', e instanceof Error ? e.message : String(e))
     return null
   } finally {
     clearTimeout(timer)
@@ -171,6 +173,16 @@ function priceFromHtml(html: string): number | null {
 // Extrait titre / image / prix / devise d'un HTML (réutilisable : page directe
 // ou page rendue par le proxy).
 type Meta = { title: string | null; image: string | null; price: number | null; currency: string | null }
+
+// Fusionne deux résultats : la valeur déjà trouvée prime sur la nouvelle.
+function mergeMeta(a: Meta, b: Meta): Meta {
+  return {
+    title: a.title || b.title,
+    image: a.image || b.image,
+    price: a.price ?? b.price,
+    currency: a.currency || b.currency,
+  }
+}
 function extract(html: string, base: URL): Meta {
   const metas = parseMetas(html)
   const titleTag = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]?.trim()
@@ -286,20 +298,18 @@ Deno.serve(async (req) => {
     // page bloquée (anti-bot) OU résultat incomplet (image ou prix manquant, ex.
     // sites rendus en JavaScript). render=true exécute le JS et débloque l'IP.
     // Le tiers ne fait que livrer le HTML — l'extraction reste assurée ici.
-    const incomplete = !data.image || data.price == null
     const blocked = looksBlocked(status, html)
-    console.log('[unfurl] direct', parsed.hostname, 'status', status, 'blocked', blocked, 'incomplete', incomplete)
-    if (blocked || incomplete) {
-      const proxied = await fetchViaProxy(parsed.toString())
-      if (proxied) {
-        const d2 = extract(proxied, parsed)
-        // On garde le meilleur de chaque source (la valeur déjà trouvée prime).
-        data = {
-          title: data.title || d2.title,
-          image: data.image || d2.image,
-          price: data.price ?? d2.price,
-          currency: data.currency || d2.currency,
-        }
+    const need = () => !data.image || data.price == null
+    console.log('[unfurl] direct', parsed.hostname, 'status', status, 'blocked', blocked, 'incomplete', need())
+    if (blocked || need()) {
+      // Phase 1 : proxy SANS rendu JS (rapide, 1 crédit) — suffit pour la plupart
+      // des e-commerces dont le blocage est seulement basé sur l'IP.
+      const p1 = await fetchViaProxy(parsed.toString(), false)
+      if (p1) data = mergeMeta(data, extract(p1, parsed))
+      // Phase 2 : encore incomplet → on tente le rendu JS (sites SPA, plus lent).
+      if (p1 && need()) {
+        const p2 = await fetchViaProxy(parsed.toString(), true)
+        if (p2) data = mergeMeta(data, extract(p2, parsed))
       }
     }
 
