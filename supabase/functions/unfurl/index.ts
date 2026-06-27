@@ -190,6 +190,34 @@ async function fetchViaProxy(target: string, opts: ProxyOpts, timeoutMs: number)
   }
 }
 
+// Image produit Amazon depuis le HTML (Amazon n'expose pas og:image fiable :
+// la vraie photo est dans data-a-dynamic-image / data-old-hires / le bloc JS).
+function amazonImageFromHtml(html: string): string | null {
+  // data-old-hires="https://…jpg"
+  let m = html.match(/data-old-hires=["'](https:\/\/[^"']+)["']/i)
+  if (m) return m[1]
+  // data-a-dynamic-image="{&quot;https://…&quot;:[500,500],…}" (clés = URLs)
+  m =
+    html.match(/data-a-dynamic-image\s*=\s*"([^"]+)"/i) ||
+    html.match(/data-a-dynamic-image\s*=\s*'([^']+)'/i)
+  if (m) {
+    try {
+      const map = JSON.parse(m[1].replace(/&quot;/g, '"'))
+      const urls = Object.keys(map)
+      if (urls.length) return urls[0]
+    } catch {
+      /* JSON invalide : on continue */
+    }
+  }
+  // Bloc JS d'images : "hiRes":"https://…jpg" puis "large":"https://…jpg"
+  m = html.match(/"hiRes":"(https:\/\/[^"]+\.jpg)"/i) || html.match(/"large":"(https:\/\/[^"]+\.jpg)"/i)
+  if (m) return m[1]
+  // <img id="landingImage" … src="https://…">
+  m = html.match(/id=["']landingImage["'][^>]*\bsrc=["'](https:\/\/[^"']+)["']/i)
+  if (m) return m[1]
+  return null
+}
+
 // Cherche un prix directement dans le DOM (dernier recours), pour les sites qui
 // n'exposent ni meta ni JSON-LD : Amazon (<span class="a-offscreen">), microdata
 // itemprop="price", ou attribut content/data-price proche d'un libellé de prix.
@@ -236,6 +264,7 @@ function extract(html: string, base: URL): Meta {
     metas['twitter:image'] ||
     metas['twitter:image:src'] ||
     ld.image || // certains sites (Fnac…) ne mettent l'image que dans le JSON-LD
+    amazonImageFromHtml(html) || // Amazon : vraie photo dans data-a-dynamic-image…
     null
   if (image) {
     image = decodeEntities(image) // les URLs OG ont souvent des &amp;
