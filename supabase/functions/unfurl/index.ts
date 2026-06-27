@@ -402,9 +402,10 @@ Deno.serve(async (req) => {
 
     // Message informatif si le service d'import est à court de crédits (la saisie
     // manuelle reste possible : on renvoie quand même ce qu'on a pu trouver).
+    // Message neutre côté utilisateur (le motif technique reste dans les logs).
     const note =
       outOfCredits && need()
-        ? "Service d'import à court de crédits — saisis la photo et le prix à la main."
+        ? 'Import automatique indisponible pour le moment — ajoute la photo et le prix à la main.'
         : null
 
     console.log('[unfurl] résultat', JSON.stringify(data), 'outOfCredits', outOfCredits)
