@@ -9,6 +9,12 @@ Row Level Security de PostgreSQL (impossible à contourner depuis le navigateur)
 - **Backend** : [Supabase](https://supabase.com/) (Postgres + Auth + Realtime + RLS).
 - **Hébergement** : GitHub Pages (déploiement auto via GitHub Actions).
 
+## Aperçu
+
+| Connexion | Mes groupes | Ma liste (import auto) |
+|:---:|:---:|:---:|
+| ![Écran de connexion](docs/screenshots/login.png) | ![Liste des groupes](docs/screenshots/groupes.png) | ![Ma liste avec import automatique de la photo et du prix](docs/screenshots/ma-liste.png) |
+
 ## Mise en route
 
 ### 1. Supabase (à faire une fois)
