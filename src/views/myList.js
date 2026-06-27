@@ -110,7 +110,10 @@ export async function renderMyList({ id: groupId }) {
       if (data.price != null && !priceInput.value.trim()) priceInput.value = data.price
       fetchedImage = data.image || null
 
-      if (fetchedImage || data.price != null) {
+      if (data.note) {
+        // Ex. crédits du service d'import épuisés : on informe sans bloquer.
+        unfurlBox.innerHTML = `<div class="preview preview--warn">${icons.alert} ${esc(data.note)}</div>`
+      } else if (fetchedImage || data.price != null) {
         unfurlBox.innerHTML = `
           <div class="preview">
             ${fetchedImage ? `<img class="thumb thumb--lg" src="${esc(fetchedImage)}" alt="" referrerpolicy="no-referrer" />` : ''}

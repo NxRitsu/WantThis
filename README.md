@@ -71,10 +71,11 @@ vérifie que l'appelant est admin avant d'agir. Mise en place (3 étapes) :
 
 ## Import auto de la photo et du prix
 
-Quand on colle le lien d'un produit, l'app récupère automatiquement sa **photo**
-(Open Graph) et son **prix**. Un frontend statique ne peut pas lire le HTML d'un
+Quand on colle le lien d'un produit, l'app récupère automatiquement son **titre**,
+sa **photo** et son **prix**. Un frontend statique ne peut pas lire le HTML d'un
 autre domaine (CORS) : c'est une **Edge Function** `unfurl` qui va chercher la page
-côté serveur et en extrait les métadonnées. Mise en place (2 étapes) :
+côté serveur et en extrait les métadonnées (Open Graph, JSON-LD schema.org, et
+quelques cas spécifiques décrits plus bas). Mise en place (2 étapes) :
 
 1. **SQL** : ajoute la colonne image au schéma (déjà inclus si tu réexécutes
    [`supabase/schema.sql`](supabase/schema.sql)). Sinon, en une ligne :
@@ -90,30 +91,36 @@ côté serveur et en extrait les métadonnées. Mise en place (2 étapes) :
 
 ### Sites anti-bot ou rendus en JavaScript (générique)
 
-Certaines pages échouent au premier chargement : marchands qui servent une page
-anti-bot aux serveurs (Amazon…), ou sites rendus côté client (SPA) dont les
-métadonnées n'existent qu'après exécution du JS. Deux contournements, **génériques
-à tous les sites** :
+Certains sites échouent au chargement direct : marchands qui servent une page
+anti-bot aux serveurs (Amazon, Fnac…), ou sites rendus côté client (SPA) dont les
+métadonnées n'existent qu'après exécution du JS. Deux contournements **génériques** :
 
-- **Fallback proxy (optionnel, recommandé)** : si la page directe est bloquée **ou
-  incomplète** (image ou prix manquant), la fonction retélécharge le HTML *réel*
-  via [ScraperAPI](https://www.scraperapi.com/) (proxies résidentiels + `render=true`
-  qui exécute le JS), puis en extrait prix/photo/titre avec le même parsing. À
-  activer en posant le secret :
+- **Fallback proxy (optionnel, recommandé)** — `SCRAPER_API_KEY`. Si la page directe
+  est bloquée **ou incomplète** (image ou prix manquant), la fonction retélécharge
+  le HTML *réel* via [ScraperAPI](https://www.scraperapi.com/), puis en extrait
+  prix/photo/titre avec le même parsing. Active-le en posant le secret :
   ```bash
   supabase secrets set SCRAPER_API_KEY=ta_cle_scraperapi
+  supabase functions deploy unfurl
   ```
-  (ou *dashboard* → Edge Functions → `unfurl` → *Secrets*). Sans cette clé, seul
-  le fetch direct est tenté.
-  > 💡 La fonction **escalade par coût croissant** et s'arrête dès qu'elle a image
-  > + prix : proxy standard (~1 crédit) → premium (~10, requis par les « domaines
-  > protégés » type Fnac) → ultra premium + rendu JS (~75, protections dures/SPA).
-  > La plupart des sites passent au standard ou premium. Tier gratuit ScraperAPI
-  > ≈ 1000 crédits/mois, large pour un usage familial. N'importe quel fournisseur
+  (ou *dashboard* → Edge Functions → `unfurl` → *Secrets*). **Sans cette clé**, seul
+  le fetch direct est tenté (les sites protégés ne remontent alors pas).
+  > 💡 La fonction tente d'abord les **proxies premium** (~10 crédits, requis par
+  > les « domaines protégés » type Fnac/Amazon), puis n'ajoute le **rendu JS**
+  > (`render=true`, ~25 crédits) que si image/prix manquent encore (vrais SPA), et
+  > s'arrête dès qu'elle a tout. Tier gratuit ScraperAPI ≈ 1000 crédits/mois, large
+  > pour un usage familial. **À court de crédits** (HTTP 401/403), l'app l'indique
+  > et bascule en saisie manuelle sans bloquer l'ajout. N'importe quel fournisseur
   > équivalent (ScrapingBee…) se branche en changeant l'URL dans `fetchViaProxy`.
-- **Photo Amazon sans scraping** : cas particulier gratuit — l'ASIN est lu dans
-  l'URL (`/dp/XXXXXXXXXX`) et l'image construite depuis le CDN Amazon, même sans
-  clé proxy et même si la page est bloquée. **Aucune configuration requise.**
+- **Photo Amazon sans scraping** : cas particulier gratuit — à défaut d'image, l'ASIN
+  est lu dans l'URL (`/dp/XXXXXXXXXX`) et une image construite depuis le CDN Amazon,
+  même sans clé proxy. La **vraie** photo produit (et le prix) restent toutefois
+  récupérés depuis le HTML dès que le proxy est actif. **Aucune config requise.**
+
+> Limites connues : photos stockées en lien (cassent si le site les supprime),
+> prix parfois ambigu (promo/variantes), parsing dépendant du HTML des sites
+> (à adapter s'ils changent), pas de cache ni de géo-ciblage (`country_code` est
+> une option payante de ScraperAPI).
 
 ## Structure
 ```

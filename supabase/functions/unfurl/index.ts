@@ -157,11 +157,12 @@ function looksBlocked(status: number, html: string): boolean {
 //   ultra    → proxies ultra premium, pour les protections les plus dures.
 //   render   → exécute le JS (sites SPA) ; lent.
 type ProxyOpts = { premium?: boolean; ultra?: boolean; render?: boolean }
-async function fetchViaProxy(target: string, opts: ProxyOpts, timeoutMs: number): Promise<string | null> {
+type ProxyResult = { html: string | null; outOfCredits: boolean }
+async function fetchViaProxy(target: string, opts: ProxyOpts, timeoutMs: number): Promise<ProxyResult> {
   const key = Deno.env.get('SCRAPER_API_KEY')
   if (!key) {
     console.error('[unfurl] SCRAPER_API_KEY absent — pas de fallback proxy')
-    return null
+    return { html: null, outOfCredits: false }
   }
   let proxyUrl =
     `https://api.scraperapi.com/?api_key=${encodeURIComponent(key)}&url=${encodeURIComponent(target)}`
@@ -176,15 +177,17 @@ async function fetchViaProxy(target: string, opts: ProxyOpts, timeoutMs: number)
     const res = await fetch(proxyUrl, { signal: ctrl.signal })
     if (!res.ok) {
       const body = await res.text().catch(() => '')
-      console.error('[unfurl] proxy HTTP', res.status, tag, body.slice(0, 200))
-      return null
+      // ScraperAPI : 401 = clé invalide, 403 + "credit" = quota épuisé.
+      const outOfCredits = res.status === 401 || (res.status === 403 && /credit/i.test(body))
+      console.error('[unfurl] proxy HTTP', res.status, tag, outOfCredits ? '(crédits/clé)' : '', body.slice(0, 200))
+      return { html: null, outOfCredits }
     }
     const text = (await res.text()).slice(0, 800_000)
     console.log('[unfurl] proxy OK', text.length, 'octets', tag, 'pour', target)
-    return text
+    return { html: text, outOfCredits: false }
   } catch (e) {
     console.error('[unfurl] proxy erreur', tag, e instanceof Error ? e.message : String(e))
-    return null
+    return { html: null, outOfCredits: false }
   } finally {
     clearTimeout(timer)
   }
@@ -372,19 +375,22 @@ Deno.serve(async (req) => {
     // Le tiers ne fait que livrer le HTML — l'extraction reste assurée ici.
     const blocked = looksBlocked(status, html)
     const need = () => !data.image || data.price == null
+    let outOfCredits = false
     console.log('[unfurl] direct', parsed.hostname, 'status', status, 'blocked', blocked, 'incomplete', need())
     if (blocked || need()) {
       // 1) Proxy PREMIUM sans rendu JS (~10 crédits) : rapide, et requis par les
       //    « domaines protégés » (Fnac…). Couvre la plupart des e-commerces, qui
       //    servent prix/OG dans le HTML serveur.
-      const h1 = await fetchViaProxy(parsed.toString(), { premium: true }, 35_000)
-      if (h1) data = mergeMeta(data, extract(h1, parsed))
+      const r1 = await fetchViaProxy(parsed.toString(), { premium: true }, 35_000)
+      outOfCredits = outOfCredits || r1.outOfCredits
+      if (r1.html) data = mergeMeta(data, extract(r1.html, parsed))
 
       // 2) Dernier recours : on a bien reçu du HTML mais il manque encore image
       //    ou prix → page rendue en JS (SPA). On exécute le JS (lent, ~25 crédits).
-      if (h1 && need()) {
-        const h2 = await fetchViaProxy(parsed.toString(), { premium: true, render: true }, 45_000)
-        if (h2) data = mergeMeta(data, extract(h2, parsed))
+      if (r1.html && need()) {
+        const r2 = await fetchViaProxy(parsed.toString(), { premium: true, render: true }, 45_000)
+        outOfCredits = outOfCredits || r2.outOfCredits
+        if (r2.html) data = mergeMeta(data, extract(r2.html, parsed))
       }
     }
 
@@ -394,8 +400,15 @@ Deno.serve(async (req) => {
       if (asin) data.image = amazonImageFromAsin(asin)
     }
 
-    console.log('[unfurl] résultat', JSON.stringify(data))
-    return json(200, data)
+    // Message informatif si le service d'import est à court de crédits (la saisie
+    // manuelle reste possible : on renvoie quand même ce qu'on a pu trouver).
+    const note =
+      outOfCredits && need()
+        ? "Service d'import à court de crédits — saisis la photo et le prix à la main."
+        : null
+
+    console.log('[unfurl] résultat', JSON.stringify(data), 'outOfCredits', outOfCredits)
+    return json(200, { ...data, note })
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
     return json(502, { error: `Impossible de lire la page : ${msg}` })

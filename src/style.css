@@ -470,6 +470,18 @@ input:focus {
   background: var(--surface-2);
   font-size: 0.88rem;
 }
+.preview--warn {
+  gap: 8px;
+  color: var(--amber);
+  background: var(--amber-soft);
+  border-color: var(--amber);
+  font-weight: 500;
+}
+.preview--warn svg {
+  width: 16px;
+  height: 16px;
+  flex: none;
+}
 .preview__text {
   min-width: 0;
 }
