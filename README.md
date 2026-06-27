@@ -105,10 +105,12 @@ métadonnées n'existent qu'après exécution du JS. Deux contournements, **gén
   ```
   (ou *dashboard* → Edge Functions → `unfurl` → *Secrets*). Sans cette clé, seul
   le fetch direct est tenté.
-  > 💡 Tier gratuit ScraperAPI ≈ 1000 crédits/mois ; un appel `render=true` coûte
-  > ~10 crédits, soit ~100 imports « difficiles »/mois — largement suffisant pour
-  > un usage familial. N'importe quel fournisseur équivalent (ScrapingBee…) se
-  > branche en changeant l'URL dans `fetchViaProxy`.
+  > 💡 La fonction **escalade par coût croissant** et s'arrête dès qu'elle a image
+  > + prix : proxy standard (~1 crédit) → premium (~10, requis par les « domaines
+  > protégés » type Fnac) → ultra premium + rendu JS (~75, protections dures/SPA).
+  > La plupart des sites passent au standard ou premium. Tier gratuit ScraperAPI
+  > ≈ 1000 crédits/mois, large pour un usage familial. N'importe quel fournisseur
+  > équivalent (ScrapingBee…) se branche en changeant l'URL dans `fetchViaProxy`.
 - **Photo Amazon sans scraping** : cas particulier gratuit — l'ASIN est lu dans
   l'URL (`/dp/XXXXXXXXXX`) et l'image construite depuis le CDN Amazon, même sans
   clé proxy et même si la page est bloquée. **Aucune configuration requise.**

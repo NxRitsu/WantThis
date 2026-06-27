@@ -118,31 +118,38 @@ function looksBlocked(status: number, html: string): boolean {
 // Récupère le HTML via un service proxy (ScraperAPI) si une clé est configurée.
 // Le tiers contourne le filtrage IP ; le parsing reste fait par notre fonction.
 // NB : pas de country_code (géo-ciblage réservé aux plans payants → 400 sinon).
-// render=true exécute le JS (sites SPA) mais est lent et coûte ~10 crédits : on
-// ne l'utilise qu'en second recours.
-async function fetchViaProxy(target: string, render: boolean): Promise<string | null> {
+// Options (coût croissant en crédits, d'où l'escalade progressive) :
+//   premium  → proxies premium, requis par les "domaines protégés" (Fnac…).
+//   ultra    → proxies ultra premium, pour les protections les plus dures.
+//   render   → exécute le JS (sites SPA) ; lent.
+type ProxyOpts = { premium?: boolean; ultra?: boolean; render?: boolean }
+async function fetchViaProxy(target: string, opts: ProxyOpts): Promise<string | null> {
   const key = Deno.env.get('SCRAPER_API_KEY')
   if (!key) {
     console.error('[unfurl] SCRAPER_API_KEY absent — pas de fallback proxy')
     return null
   }
-  const proxyUrl =
-    `https://api.scraperapi.com/?api_key=${encodeURIComponent(key)}` +
-    `&url=${encodeURIComponent(target)}${render ? '&render=true' : ''}`
+  let proxyUrl =
+    `https://api.scraperapi.com/?api_key=${encodeURIComponent(key)}&url=${encodeURIComponent(target)}`
+  if (opts.ultra) proxyUrl += '&ultra_premium=true'
+  else if (opts.premium) proxyUrl += '&premium=true'
+  if (opts.render) proxyUrl += '&render=true'
+
+  const tag = `${opts.ultra ? 'ultra' : opts.premium ? 'premium' : 'std'}${opts.render ? '+render' : ''}`
   const ctrl = new AbortController()
-  const timer = setTimeout(() => ctrl.abort(), render ? 50_000 : 25_000)
+  const timer = setTimeout(() => ctrl.abort(), opts.render ? 50_000 : 25_000)
   try {
     const res = await fetch(proxyUrl, { signal: ctrl.signal })
     if (!res.ok) {
       const body = await res.text().catch(() => '')
-      console.error('[unfurl] proxy HTTP', res.status, 'render', render, body.slice(0, 300))
+      console.error('[unfurl] proxy HTTP', res.status, tag, body.slice(0, 200))
       return null
     }
     const text = (await res.text()).slice(0, 800_000)
-    console.log('[unfurl] proxy OK', text.length, 'octets (render', render + ') pour', target)
+    console.log('[unfurl] proxy OK', text.length, 'octets', tag, 'pour', target)
     return text
   } catch (e) {
-    console.error('[unfurl] proxy erreur (render', render + ')', e instanceof Error ? e.message : String(e))
+    console.error('[unfurl] proxy erreur', tag, e instanceof Error ? e.message : String(e))
     return null
   } finally {
     clearTimeout(timer)
@@ -302,14 +309,15 @@ Deno.serve(async (req) => {
     const need = () => !data.image || data.price == null
     console.log('[unfurl] direct', parsed.hostname, 'status', status, 'blocked', blocked, 'incomplete', need())
     if (blocked || need()) {
-      // Phase 1 : proxy SANS rendu JS (rapide, 1 crédit) — suffit pour la plupart
-      // des e-commerces dont le blocage est seulement basé sur l'IP.
-      const p1 = await fetchViaProxy(parsed.toString(), false)
-      if (p1) data = mergeMeta(data, extract(p1, parsed))
-      // Phase 2 : encore incomplet → on tente le rendu JS (sites SPA, plus lent).
-      if (p1 && need()) {
-        const p2 = await fetchViaProxy(parsed.toString(), true)
-        if (p2) data = mergeMeta(data, extract(p2, parsed))
+      // Escalade par coût croissant : on s'arrête dès qu'on a image + prix.
+      //   1. proxy standard          (~1 crédit)
+      //   2. proxy premium           (~10 crédits) — domaines protégés (Fnac…)
+      //   3. ultra premium + rendu JS (~75 crédits) — protections dures / SPA
+      const attempts: ProxyOpts[] = [{}, { premium: true }, { ultra: true, render: true }]
+      for (const opts of attempts) {
+        const h = await fetchViaProxy(parsed.toString(), opts)
+        if (h) data = mergeMeta(data, extract(h, parsed))
+        if (!need()) break // résultat complet : inutile d'aller plus loin
       }
     }
 
