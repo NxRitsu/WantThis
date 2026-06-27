@@ -59,8 +59,22 @@ function parsePrice(raw?: string | null): number | null {
   return Number.isFinite(n) ? Math.round(n * 100) / 100 : null
 }
 
-// Cherche un prix dans d'éventuels blocs JSON-LD (schema.org).
-function priceFromJsonLd(html: string): { price: number | null; currency: string | null } {
+// Normalise une valeur "image" de schema.org (string | string[] | {url}).
+function pickImage(v: unknown): string | null {
+  if (typeof v === 'string') return v
+  if (Array.isArray(v)) return v.length ? pickImage(v[0]) : null
+  if (v && typeof v === 'object') {
+    const o = v as Record<string, unknown>
+    return (typeof o.url === 'string' && o.url) || (typeof o['@id'] === 'string' && o['@id']) || null
+  }
+  return null
+}
+
+// Cherche prix / devise / image dans d'éventuels blocs JSON-LD (schema.org).
+function fromJsonLd(html: string): { price: number | null; currency: string | null; image: string | null } {
+  let price: number | null = null
+  let currency: string | null = null
+  let image: string | null = null
   const re = /<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi
   let m: RegExpExecArray | null
   while ((m = re.exec(html))) {
@@ -68,20 +82,40 @@ function priceFromJsonLd(html: string): { price: number | null; currency: string
       const data = JSON.parse(m[1].trim())
       const nodes = Array.isArray(data) ? data : [data, ...(data['@graph'] ?? [])]
       for (const node of nodes) {
-        const offers = node?.offers
-        const offer = Array.isArray(offers) ? offers[0] : offers
-        if (offer?.price != null) {
-          return { price: parsePrice(String(offer.price)), currency: offer.priceCurrency ?? null }
-        }
-        if (node?.price != null) {
-          return { price: parsePrice(String(node.price)), currency: node.priceCurrency ?? null }
+        if (!node || typeof node !== 'object') continue
+        if (image == null && node.image != null) image = pickImage(node.image)
+        if (price == null) {
+          const offers = node.offers
+          const offer = Array.isArray(offers) ? offers[0] : offers
+          if (offer?.price != null) {
+            price = parsePrice(String(offer.price))
+            currency = offer.priceCurrency ?? currency
+          } else if (node.price != null) {
+            price = parsePrice(String(node.price))
+            currency = node.priceCurrency ?? currency
+          }
         }
       }
     } catch {
       /* JSON-LD invalide : on ignore */
     }
   }
-  return { price: null, currency: null }
+  return { price, currency, image }
+}
+
+// Décode les entités HTML les plus courantes (&amp;, &#233;, &#xE9;, &quot;…).
+function decodeEntities(s: string | null): string | null {
+  if (!s) return s
+  return s
+    .replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCodePoint(parseInt(h, 16)))
+    .replace(/&#(\d+);/g, (_, d) => String.fromCodePoint(parseInt(d, 10)))
+    .replace(/&quot;/gi, '"')
+    .replace(/&apos;/gi, "'")
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&amp;/gi, '&') // en dernier pour ne pas ré-introduire d'entités
+    .trim()
 }
 
 // --- Amazon : photo sans scraping (déduite de l'ASIN présent dans l'URL) ------
@@ -193,6 +227,7 @@ function mergeMeta(a: Meta, b: Meta): Meta {
 function extract(html: string, base: URL): Meta {
   const metas = parseMetas(html)
   const titleTag = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]?.trim()
+  const ld = fromJsonLd(html)
 
   let image =
     metas['og:image'] ||
@@ -200,16 +235,17 @@ function extract(html: string, base: URL): Meta {
     metas['og:image:secure_url'] ||
     metas['twitter:image'] ||
     metas['twitter:image:src'] ||
+    ld.image || // certains sites (Fnac…) ne mettent l'image que dans le JSON-LD
     null
   if (image) {
+    image = decodeEntities(image) // les URLs OG ont souvent des &amp;
     try {
-      image = new URL(image, base.toString()).toString() // résout les chemins relatifs
+      image = new URL(image!, base.toString()).toString() // résout les chemins relatifs
     } catch {
       image = null
     }
   }
 
-  const ld = priceFromJsonLd(html)
   const price =
     parsePrice(metas['product:price:amount']) ??
     parsePrice(metas['og:price:amount']) ??
@@ -219,7 +255,7 @@ function extract(html: string, base: URL): Meta {
   const currency =
     metas['product:price:currency'] || metas['og:price:currency'] || ld.currency || null
 
-  const title = metas['og:title'] || metas['twitter:title'] || titleTag || null
+  const title = decodeEntities(metas['og:title'] || metas['twitter:title'] || titleTag || null)
   return { title, image, price, currency }
 }
 
