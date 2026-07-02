@@ -735,6 +735,160 @@ input:focus {
   height: 18px;
 }
 
+/* ---- Bouton d'aide « i » ---- */
+.tuto-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: 50%;
+  background: var(--surface-2);
+  color: var(--muted);
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background 0.15s, transform 0.12s var(--ease);
+}
+.tuto-btn:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.tuto-btn:active {
+  transform: scale(0.94);
+}
+.tuto-btn svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* Position sur la carte de connexion (coin haut-droit) */
+.auth-wrap .card {
+  position: relative;
+}
+.auth-wrap .tuto-btn {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+}
+
+/* ---- Modale tutoriel ---- */
+.tuto-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  padding-top: max(20px, env(safe-area-inset-top));
+  padding-bottom: max(20px, env(safe-area-inset-bottom));
+  background: rgba(8, 8, 16, 0.5);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  animation: fade-in 0.2s var(--ease) both;
+}
+.tuto-overlay--closing {
+  animation: fade-in 0.16s var(--ease) reverse both;
+}
+
+.tuto-card {
+  position: relative;
+  width: 100%;
+  max-width: 380px;
+  max-height: 100%;
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-xl);
+  box-shadow: var(--shadow-lg);
+  padding: 28px 24px 20px;
+  text-align: center;
+  animation: scale-in 0.3s var(--ease) both;
+}
+
+.tuto-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.tuto-close:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+.tuto-close svg {
+  width: 18px;
+  height: 18px;
+}
+
+.tuto-icon {
+  width: 56px;
+  height: 56px;
+  margin: 6px auto 16px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--r);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.tuto-icon svg {
+  width: 28px;
+  height: 28px;
+}
+
+.tuto-title {
+  margin: 0 0 8px;
+}
+.tuto-body {
+  margin: 0 0 20px;
+  color: var(--muted);
+  font-size: 0.95rem;
+  line-height: 1.6;
+}
+.tuto-body b {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.tuto-dots {
+  display: flex;
+  justify-content: center;
+  gap: 7px;
+  margin-bottom: 18px;
+}
+.tuto-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--border-strong);
+  transition: background 0.2s, transform 0.2s;
+}
+.tuto-dot.is-active {
+  background: var(--accent);
+  transform: scale(1.25);
+}
+
+.tuto-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.tuto-nav .btn {
+  min-width: 112px;
+}
+
 /* ---- Grand écran ---- */
 @media (min-width: 720px) {
   .container {

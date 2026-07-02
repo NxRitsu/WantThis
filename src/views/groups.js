@@ -3,6 +3,7 @@ import { shell, wireLayout } from './layout.js'
 import { getMyGroups, createGroup, joinGroup } from '../api.js'
 import { navigate } from '../router.js'
 import { icons } from '../icons.js'
+import { tutoButton, wireTuto } from '../tutorial.js'
 
 export async function renderGroups() {
   app().innerHTML = shell(`<p class="muted">Chargement…</p>`)
@@ -33,7 +34,10 @@ export async function renderGroups() {
   app().innerHTML = shell(`
     <div class="card">
       <div class="row--between" style="margin-bottom:14px">
-        <h2 style="margin:0">Mes groupes</h2>
+        <div class="row" style="gap:10px">
+          <h2 style="margin:0">Mes groupes</h2>
+          ${tutoButton()}
+        </div>
         ${groups.length ? `<span class="badge badge--admin">${icons.users} ${groups.length}</span>` : ''}
       </div>
       ${groupsHtml}
@@ -72,6 +76,7 @@ export async function renderGroups() {
     }
   `)
   wireLayout(app())
+  wireTuto(app(), 'usage')
 
   app().querySelector('#admin-link')?.addEventListener('click', () => navigate('/admin'))
 

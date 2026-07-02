@@ -2,6 +2,7 @@ import { app } from '../store.js'
 import { signIn, signUp, sendPasswordReset } from '../auth.js'
 import { navigate } from '../router.js'
 import { icons } from '../icons.js'
+import { tutoButton, wireTuto } from '../tutorial.js'
 
 export function renderLogin() {
   let mode = 'login' // 'login' | 'signup' | 'forgot'
@@ -21,6 +22,7 @@ export function renderLogin() {
     app().innerHTML = `
       <div class="auth-wrap">
         <div class="card">
+          ${tutoButton()}
           <div class="auth-logo">${icons.gift}</div>
           <h2 class="center">WantThis</h2>
           <p class="center muted">${subtitle()}</p>
@@ -62,6 +64,8 @@ export function renderLogin() {
         </div>
       </div>
     `
+
+    wireTuto(app(), 'login')
 
     app().querySelector('#toggle').addEventListener('click', () => {
       mode = mode === 'login' ? 'signup' : 'login'
