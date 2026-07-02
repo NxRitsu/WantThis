@@ -1,4 +1,4 @@
-import { app, esc, state } from '../store.js'
+import { app, esc, state, safeUrl } from '../store.js'
 import { shell, wireLayout } from './layout.js'
 import { getGifts, addGift, updateGift, deleteGift, unfurl } from '../api.js'
 import { navigate } from '../router.js'
@@ -9,8 +9,10 @@ function priceLabel(p) {
 }
 
 function giftItem(g) {
+  const link = safeUrl(g.url)
+  const img = safeUrl(g.image_url)
   const sub = [
-    g.url ? `<a href="${esc(g.url)}" target="_blank" rel="noopener">Voir le lien</a>` : '',
+    link ? `<a href="${esc(link)}" target="_blank" rel="noopener noreferrer">Voir le lien</a>` : '',
     g.price != null ? esc(priceLabel(g.price)) : '',
   ]
     .filter(Boolean)
@@ -19,8 +21,8 @@ function giftItem(g) {
     <li class="list-item" data-gift="${esc(g.id)}">
       <div class="row" style="min-width:0">
         ${
-          g.image_url
-            ? `<img class="thumb" src="${esc(g.image_url)}" alt="" loading="lazy" referrerpolicy="no-referrer" />`
+          img
+            ? `<img class="thumb" src="${esc(img)}" alt="" loading="lazy" referrerpolicy="no-referrer" />`
             : ''
         }
         <div class="list-item__main">

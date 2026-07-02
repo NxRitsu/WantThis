@@ -15,6 +15,14 @@ export function esc(value) {
   )
 }
 
+// N'autorise que les URLs http(s) avant de les rendre dans un href/src.
+// Bloque les schémas dangereux (javascript:, data:, etc.) qu'un membre aurait
+// pu glisser dans le lien ou l'image d'un cadeau. Renvoie '' si l'URL n'est pas sûre.
+export function safeUrl(value) {
+  const s = String(value ?? '').trim()
+  return /^https?:\/\//i.test(s) ? s : ''
+}
+
 export function initials(name) {
   const parts = String(name || '?').trim().split(/\s+/)
   return ((parts[0]?.[0] || '') + (parts[1]?.[0] || '')).toUpperCase() || '?'
