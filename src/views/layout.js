@@ -1,7 +1,7 @@
 import { esc } from '../store.js'
 import { signOut } from '../auth.js'
 import { navigate } from '../router.js'
-import { icons } from '../icons.js'
+import { icons, logo } from '../icons.js'
 
 // Construit le markup de l'écran avec une barre supérieure translucide.
 // options: { title, back } — back = chemin de retour (ou null).
@@ -12,7 +12,7 @@ export function shell(bodyHtml, { title = 'WantThis', back = null } = {}) {
         ${
           back
             ? `<button class="icon-btn" data-back="${esc(back)}" aria-label="Retour">${icons.back}<span>Retour</span></button>`
-            : `<span class="brand">${icons.gift}WantThis</span>`
+            : `<span class="brand">${logo}WantThis</span>`
         }
       </div>
       <div class="topbar__center">${back ? esc(title) : ''}</div>

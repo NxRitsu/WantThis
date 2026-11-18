@@ -1,7 +1,7 @@
 import { app } from '../store.js'
 import { signIn, signUp, sendPasswordReset } from '../auth.js'
 import { navigate } from '../router.js'
-import { icons } from '../icons.js'
+import { icons, logo } from '../icons.js'
 import { tutoButton, wireTuto } from '../tutorial.js'
 
 export function renderLogin() {
@@ -23,7 +23,7 @@ export function renderLogin() {
       <div class="auth-wrap">
         <div class="card">
           ${tutoButton()}
-          <div class="auth-logo">${icons.gift}</div>
+          <div class="auth-logo">${logo}</div>
           <h2 class="center">WantThis</h2>
           <p class="center muted">${subtitle()}</p>
           <div id="err"></div>

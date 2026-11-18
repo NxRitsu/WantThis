@@ -4,6 +4,10 @@
 const svg = (paths) =>
   `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths}</svg>`
 
+// Logo de l'app (étiquette cadeau « W ») — couleurs fixes de la marque.
+// Source : docs/logos/6-etiquette.svg (PNG générés par scripts/gen-icons.mjs).
+export const logo = `<svg class="logo-mark" viewBox="0 0 120 120" aria-hidden="true"><rect width="120" height="120" rx="27" fill="#6366f1"/><g transform="rotate(-12 60 60)"><path d="M60 35C63 20 82 16 96 26" fill="none" stroke="#fbbf24" stroke-width="3.5" stroke-linecap="round"/><path d="M60 22L84 42V92Q84 98 78 98H42Q36 98 36 92V42Z" fill="#fff"/><circle cx="60" cy="40" r="5" fill="#6366f1"/><polyline points="44,62 51,84 60,68 69,84 76,62" fill="none" stroke="#6366f1" stroke-width="6.5" stroke-linecap="round" stroke-linejoin="round"/></g></svg>`
+
 export const icons = {
   gift: svg(
     '<rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13M5 12v7a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-7"/><path d="M12 8S10.5 3.5 8 3.5 5 7 8 8M12 8s1.5-4.5 4-4.5 3 3.5 0 4.5"/>'

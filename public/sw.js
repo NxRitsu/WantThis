@@ -3,7 +3,7 @@
 // NB : les données (Supabase) ne sont volontairement PAS mises en cache —
 // on veut toujours des réservations à jour.
 
-const CACHE = 'wantthis-v1'
+const CACHE = 'wantthis-v2'
 const APP_SHELL = ['/WantThis/', '/WantThis/index.html']
 
 self.addEventListener('install', (event) => {
